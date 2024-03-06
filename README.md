@@ -22,3 +22,8 @@ TODO:
 2.	Figure out why Gustav.pak, Models.pak, and SharedSounds.pak do not extract fully.
 
 Source code only, it needs work definitely.
+
+
+
+All files extracted from this software are the exclusive property of Larian Studios.
+By accessing or extracting these files, you acknowledge and agree to Larian Studios' ownership and proprietary rights.
