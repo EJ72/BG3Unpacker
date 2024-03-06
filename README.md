@@ -25,7 +25,7 @@ This command will extract the contents of " Assets.pak " into a directory named 
 
 TODO:
 1.	Support multi-archives for Textures and VirtualTextures (Only the contents of the first archive extract)
-2.	
+   
 3.	Figure out why Gustav.pak, Models.pak, and SharedSounds.pak do not extract fully.
 
 Source code only, it needs work definitely.
