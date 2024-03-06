@@ -3,7 +3,8 @@ The BG3Unpacker is a command-line tool designed specifically for extracting file
 Usage: To utilize the BG3Unpacker, follow these straightforward steps:
 1.	Download the Tool: Ensure you have the BG3Unpacker executable. Obtain the tool from a trusted source or compile it from the provided source code. (To be Determined)
 2.	Command-Line Syntax: Open a command prompt or terminal window and navigate to the directory containing the BG3Unpacker executable. The basic syntax for running the tool is as follows:
-BG3Unpacker <input_file> 
+BG3Unpacker <input_file>
+
 Drag and Drop:
 An alternative way to use BG3Unpacker is by dragging and dropping the game archive directly onto the executable file. Simply locate the BG3Unpacker executable, drag the target game archive onto the executable, and the tool will automatically begin the extraction process.
 Replace <input_file> with the path to the BG3 game archive you want to unpack.
