@@ -11,9 +11,11 @@ Replace <input_file> with the path to the BG3 game archive you want to unpack.
 4.	Output Directory: The extracted files will be placed in a directory named after the input file's stem (excluding the extension). The tool automatically creates this directory in the same location as the input file.
 5.	Monitoring Progress: During the extraction process, the tool provides information about the decompression of each file, including the compressed size, expected decompressed size, and progress percentage.
 6.	Completion Time: After the extraction is complete, the tool displays the total time elapsed for the entire process.
+
 Example Usage:
 BG3Unpacker Assets.pak 
 This command will extract the contents of " Assets.pak " into a directory named " Assets " in the same location as the input file.
+
 TODO:
 1.	Support multi-archives for Textures and VirtualTextures (Only the contents of the first archive extract)
 2.	Figure out why Gustav.pak, Models.pak, and SharedSounds.pak do not extract fully.
