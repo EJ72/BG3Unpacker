@@ -175,7 +175,8 @@ static void processFile(const std::string& inputFilename, const std::string& out
 	try {
 		std::ifstream input(inputFilename, std::ios::binary);
 		if (!input.is_open()) throw std::runtime_error("Error opening input file.");
-
+		
+		// Magic Check
 		char idString[5] = { 0 };
 		input.read(idString, 4);
 		if (std::string(idString) != MAGIC_STRING) throw std::runtime_error("Invalid ID string. Not a valid LSPK file.");
@@ -184,6 +185,10 @@ static void processFile(const std::string& inputFilename, const std::string& out
 		uint64_t tableOffset = 0;
 
 		input.read(reinterpret_cast<char*>(&version), sizeof(version));
+
+		// Version check
+		if (version != 18) throw std::runtime_error("Package version is not 18. Skipping extraction.");
+		
 		input.read(reinterpret_cast<char*>(&tableOffset), sizeof(tableOffset));
 
 		input.seekg(tableOffset);
