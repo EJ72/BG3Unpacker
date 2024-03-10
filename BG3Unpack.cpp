@@ -218,7 +218,7 @@ static void processFile(const std::string& inputFilename, const std::string& out
 			bool containsUncompressed = (entry.compressionType == 0);
 			entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + (containsUncompressed ? 264 : 268)]);
 
-			if (entry.offset == 0xbeefdeadbeef || entry.offset == 0x0000deadbeef) {
+			if (entry.offset == 0xbeefdeadbeef) {
 				std::cout << "\nSkipping deleted entry: " << entry.name << std::endl;
 				continue;
 			}
