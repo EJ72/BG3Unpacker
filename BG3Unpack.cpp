@@ -21,6 +21,14 @@ struct FileEntry {
 	uint32_t offset = 0, compressionType = 0, compressedSize = 0, size = 0;
 };
 
+static std::vector<char> lz4Uncmp(const std::vector<char>& input, uint32_t inputSize, uint32_t outputSize) {
+	std::vector<char> output(outputSize);
+	int decompressedSize = LZ4_decompress_safe(input.data(), output.data(), inputSize, outputSize);
+
+	if (decompressedSize < 0) throw std::runtime_error("Error during LZ4 decompression: " + std::to_string(decompressedSize));
+	return output;
+}
+
 static std::vector<char> zlibUncmp(const std::vector<char>& input, uint32_t inputSize, uint32_t outputSize) {
 	std::vector<char> output(outputSize);
 
@@ -48,14 +56,6 @@ static std::vector<char> zlibUncmp(const std::vector<char>& input, uint32_t inpu
 	return output;
 }
 
-static std::vector<char> lz4Uncmp(const std::vector<char>& input, uint32_t inputSize, uint32_t outputSize) {
-	std::vector<char> output(outputSize);
-	int decompressedSize = LZ4_decompress_safe(input.data(), output.data(), inputSize, outputSize);
-
-	if (decompressedSize < 0) throw std::runtime_error("Error during LZ4 decompression: " + std::to_string(decompressedSize));
-	return output;
-}
-
 static std::vector<char> zstdUncmp(const std::vector<char>& input, uint32_t inputSize, uint32_t outputSize) {
 	std::vector<char> output(outputSize);
 	ZSTD_DCtx* ctx = ZSTD_createDCtx();
@@ -68,6 +68,52 @@ static std::vector<char> zstdUncmp(const std::vector<char>& input, uint32_t inpu
 
 	ZSTD_freeDCtx(ctx);
 	return output;
+}
+
+static void extractLZ4(std::ifstream& input, const std::string& outputDirectory, const FileEntry& entry, int& filesExtracted, int totalFiles) {
+	try {
+		input.seekg(entry.offset, std::ios::beg);
+
+		fs::create_directories(fs::path(outputDirectory) /= fs::path(entry.name).remove_filename());
+		std::ofstream output(fs::path(outputDirectory) / fs::path(entry.name), std::ios::binary);
+		if (!output.is_open()) throw std::runtime_error("Error opening output file for writing: " + entry.name);
+
+		std::vector<char> data(entry.size, 0);
+
+		if (entry.compressionType == 0) {
+			if (entry.size > 0) {
+				input.read(data.data(), entry.size);
+				if (input.gcount() != entry.size) throw std::runtime_error("Error: Incorrect data size for file: " + entry.name);
+				output.write(data.data(), entry.size);
+			}
+			else {
+				std::cout << "Skipping entry with size 0: " << entry.name << std::endl;
+			}
+		}
+		else {
+			std::vector<char> compressedData(entry.compressedSize, 0);
+			input.read(compressedData.data(), entry.compressedSize);
+			if (compressedData.size() != entry.compressedSize) throw std::runtime_error("Error: Incorrect compressed data size for file: " + entry.name);
+			std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
+			// Check if the compression type needs to shift back one byte
+
+			std::vector<char> outputBuffer(entry.size, 0);
+			size_t decompressedSize = LZ4_decompress_safe(compressedData.data(), outputBuffer.data(), entry.compressedSize, entry.size);
+
+			std::cout << "Actual Decompressed Size: " << decompressedSize << " bytes" << std::endl;
+			if (decompressedSize != entry.size) throw std::runtime_error("Unexpected decompressed size for file: " + entry.name);
+
+			output.write(outputBuffer.data(), decompressedSize);
+		}
+
+		++filesExtracted;
+		float progress = static_cast<float>(filesExtracted) / totalFiles * 100;
+		std::cout << "\rProgress: " << std::fixed << std::setprecision(1) << progress << "%\n";
+		std::cout.flush();
+	}
+	catch (const std::runtime_error& e) {
+		std::cerr << e.what() << " Skipping file: " << entry.name << std::endl;
+	}
 }
 
 static void extractZLIB(std::ifstream& input, const std::string& outputDirectory, const FileEntry& entry, int& filesExtracted, int totalFiles) {
@@ -126,60 +172,15 @@ static void extractZSTD(std::ifstream& input, const std::string& outputDirectory
 	}
 }
 
-static void extractLZ4(std::ifstream& input, const std::string& outputDirectory, const FileEntry& entry, int& filesExtracted, int totalFiles) {
-	try {
-		input.seekg(entry.offset, std::ios::beg);
-
-		fs::create_directories(fs::path(outputDirectory) /= fs::path(entry.name).remove_filename());
-		std::ofstream output(fs::path(outputDirectory) / fs::path(entry.name), std::ios::binary);
-		if (!output.is_open()) throw std::runtime_error("Error opening output file for writing: " + entry.name);
-
-		std::vector<char> data(entry.size, 0);
-
-		if (entry.compressionType == 0) {
-			if (entry.size > 0) {
-				input.read(data.data(), entry.size);
-				if (input.gcount() != entry.size) throw std::runtime_error("Error: Incorrect data size for file: " + entry.name);
-				output.write(data.data(), entry.size);
-			}
-			else {
-				std::cout << "Skipping entry with size 0: " << entry.name << std::endl;
-			}
-		}
-		else {
-			std::vector<char> compressedData(entry.compressedSize, 0);
-			input.read(compressedData.data(), entry.compressedSize);
-			if (compressedData.size() != entry.compressedSize) throw std::runtime_error("Error: Incorrect compressed data size for file: " + entry.name);
-			std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
-
-			std::vector<char> outputBuffer(entry.size, 0);
-			size_t decompressedSize = LZ4_decompress_safe(compressedData.data(), outputBuffer.data(), entry.compressedSize, entry.size);
-
-			std::cout << "Actual Decompressed Size: " << decompressedSize << " bytes" << std::endl;
-			if (decompressedSize != entry.size) throw std::runtime_error("Unexpected decompressed size for file: " + entry.name);
-
-			output.write(outputBuffer.data(), decompressedSize);
-		}
-
-		++filesExtracted;
-		float progress = static_cast<float>(filesExtracted) / totalFiles * 100;
-		std::cout << "\rProgress: " << std::fixed << std::setprecision(1) << progress << "%\n";
-		std::cout.flush();
-	}
-	catch (const std::runtime_error& e) {
-		std::cerr << e.what() << " Skipping file: " << entry.name << std::endl;
-	}
-}
-
 static void processFile(const std::string& inputFilename, const std::string& outputDirectory) {
 	try {
 		std::ifstream input(inputFilename, std::ios::binary);
 		if (!input.is_open()) throw std::runtime_error("Error opening input file.");
-		
+
 		// Magic Check
 		char idString[5] = { 0 };
 		input.read(idString, 4);
-		if (std::string(idString) != MAGIC_STRING) throw std::runtime_error("Invalid ID string. Not a valid LSPK file.");
+		if (std::string(idString) != MAGIC_STRING) throw std::runtime_error("Invalid ID string. Not a valid LSPK file. Skipping extraction.");
 
 		uint32_t version = 0, numFiles = 0, tableCompressedSize = 0;
 		uint64_t tableOffset = 0;
@@ -188,7 +189,7 @@ static void processFile(const std::string& inputFilename, const std::string& out
 
 		// Version check
 		if (version != 18) throw std::runtime_error("Package version is not 18. Skipping extraction.");
-		
+
 		input.read(reinterpret_cast<char*>(&tableOffset), sizeof(tableOffset));
 
 		input.seekg(tableOffset);
@@ -215,32 +216,37 @@ static void processFile(const std::string& inputFilename, const std::string& out
 			entry.offset = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 256]);
 			entry.compressionType = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 260]);
 			entry.compressedSize = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 264]);
-			bool containsUncompressed = (entry.compressionType == 0);
-			entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + (containsUncompressed ? 264 : 268)]);
 
-			if (entry.offset == 0xbeefdeadbeef) {
-				std::cout << "\nSkipping deleted entry: " << entry.name << std::endl;
-				continue;
-			}
-
-			std::cout << "\nFile: " << entry.name << "\nCompression Type: " << entry.compressionType << std::endl;
+			std::cout << "\nFile: " << entry.name << std::endl;
 
 			// Check the compression type and call the appropriate function
-			if (entry.compressionType == 0x23000000) {
-				extractZSTD(input, outputDirectory, entry, filesExtracted, numFiles);
-			}
-			else if (entry.compressionType == 0x21000000) {
-				extractZLIB(input, outputDirectory, entry, filesExtracted, numFiles);
-			}
-			else if (entry.compressionType == 0x42000000 || entry.compressionType == 0) {
+			if (entry.compressionType == 0x0) {
+				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 264]);
+				std::cout << "\nCompression type: 0 (Uncompressed)" << std::endl;
 				extractLZ4(input, outputDirectory, entry, filesExtracted, numFiles);
 			}
+			else if (entry.compressionType == 0x21000000) {
+				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 268]);
+				std::cout << "\nCompression type: 1 (Pre-Patch 6 - ZLIB)" << std::endl;
+				extractZLIB(input, outputDirectory, entry, filesExtracted, numFiles);
+			}
+			else if (entry.compressionType == 0x42000000) {
+				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 268]);
+				std::cout << "\nCompression type: 2 (LZ4)" << std::endl;
+				extractLZ4(input, outputDirectory, entry, filesExtracted, numFiles);
+			}
+			else if (entry.compressionType == 0x23000000) {
+				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 268]);
+				std::cout << "\nCompression type: 3 (Patch 6 - ZSTD)" << std::endl;
+				extractZSTD(input, outputDirectory, entry, filesExtracted, numFiles);
+			}
 			else {
-				std::cout << "\nCan't Extract This Yet!";
+				std::cout << "\n4GB+ Sized files don't extract fully! Why???" << std::endl;
 			}
 		}
 
 		std::cout << "\nExtraction complete!";
+
 	}
 	catch (const std::runtime_error& e) {
 		std::cerr << e.what() << std::endl;
