@@ -1,7 +1,7 @@
 Introduction: 
 The BG3Unpacker is a command-line tool designed specifically for extracting files from Larian Studios' Baldur's Gate 3 (Release version ONLY). This tool simplifies the process of unpacking and accessing the contents of Larian's archive formats, offering support for ZLIB, LZ4, and ZSTD.
 Usage: To utilize the BG3Unpacker, follow these straightforward steps:
-1.	Download the Tool: Ensure you have the BG3Unpacker executable. Obtain the tool from a trusted source or compile it from the provided source code. (To be Determined)
+1.	Download the Tool: Ensure you have the BG3Unpacker executable. Obtain the tool from a trusted source or compile it from the provided source code.
    
 3.	Command-Line Syntax: Open a command prompt or terminal window and navigate to the directory containing the BG3Unpacker executable. The basic syntax for running the tool is as follows:
    
@@ -20,7 +20,8 @@ Replace <input_file> with the path to the BG3 game archive you want to unpack.
    
 
 Example Usage:
-BG3Unpacker Assets.pak 
+BG3Unpacker Assets.pak
+
 This command will extract the contents of " Assets.pak " into a directory named " Assets " in the same location as the input file.
 
 TODO:
