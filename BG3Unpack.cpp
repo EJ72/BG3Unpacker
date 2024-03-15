@@ -94,13 +94,11 @@ static void extractLZ4(std::ifstream& input, const std::string& outputDirectory,
 			std::vector<char> compressedData(entry.compressedSize, 0);
 			input.read(compressedData.data(), entry.compressedSize);
 			if (compressedData.size() != entry.compressedSize) throw std::runtime_error("Error: Incorrect compressed data size for file: " + entry.name);
-			std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
-			// Check if the compression type needs to shift back one byte
-
+			
 			std::vector<char> outputBuffer(entry.size, 0);
 			size_t decompressedSize = LZ4_decompress_safe(compressedData.data(), outputBuffer.data(), entry.compressedSize, entry.size);
 
-			std::cout << "Actual Decompressed Size: " << decompressedSize << " bytes" << std::endl;
+			std::cout << "Actual Decompressed Size: " << decompressedSize << std::dec << " bytes" << std::endl;
 			if (decompressedSize != entry.size) throw std::runtime_error("Unexpected decompressed size for file: " + entry.name);
 
 			output.write(outputBuffer.data(), decompressedSize);
@@ -132,7 +130,7 @@ static void extractZLIB(std::ifstream& input, const std::string& outputDirectory
 		outputBuffer = zlibUncmp(data, entry.compressedSize, entry.size);
 
 		output.write(outputBuffer.data(), entry.size);
-		std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
+		std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << std::dec << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
 
 		++filesExtracted;
 		float progress = static_cast<float>(filesExtracted) / totalFiles * 100;
@@ -160,7 +158,7 @@ static void extractZSTD(std::ifstream& input, const std::string& outputDirectory
 		outputBuffer = zstdUncmp(data, entry.compressedSize, entry.size);
 
 		output.write(outputBuffer.data(), entry.size);
-		std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
+		std::cout << "Decompressing file: " << entry.name << "\nCompressed Size: " << std::dec << entry.compressedSize << " bytes\nExpected Decompressed Size: " << entry.size << " bytes" << std::endl;
 
 		++filesExtracted;
 		float progress = static_cast<float>(filesExtracted) / totalFiles * 100;
@@ -210,43 +208,63 @@ static void processFile(const std::string& inputFilename, const std::string& out
 
 		int filesExtracted = 0;
 
+		// Open a file to write the file list
+		std::ofstream fileList(inputFilename.substr(0, inputFilename.find_last_of('.')) + "_files.log");
+		if (!fileList.is_open()) throw std::runtime_error("Error opening file list file for writing.");
+
 		for (uint32_t i = 0; i < numFiles; ++i) {
 			FileEntry entry;
 			entry.name.assign(tableData.begin() + i * TABLE_ENTRY_SIZE, tableData.begin() + i * TABLE_ENTRY_SIZE + 256);
 			entry.offset = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 256]);
 			entry.compressionType = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 260]);
 			entry.compressedSize = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 264]);
+			bool containsUncompressed = (entry.compressionType == 0);
+			entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + (containsUncompressed ? 264 : 268)]);
+
+			// Trim the file name to remove any trailing null characters
+			entry.name.erase(std::find(entry.name.begin(), entry.name.end(), '\0'), entry.name.end());
+
+			// Write entry information to the file list
+			fileList << "Name: " << entry.name << std::endl;
+			fileList << "Offset: " << "0x" << std::hex << entry.offset << std::endl;
+			fileList << "Compression Type: " << "0x" << std::hex << entry.compressionType << std::endl;
+			fileList << "Compressed Size: " << std::dec << entry.compressedSize << " bytes." << std::endl;
+			fileList << "Decompressed Size: " << std::dec << entry.size << " bytes." << std::endl;
+
+			// Output an empty line only if it's not the last entry
+			if (i < numFiles - 1)
+				fileList << "\n";
 
 			std::cout << "\nFile: " << entry.name << std::endl;
+			std::cout << "Offset: 0x" << std::hex << entry.offset << std::endl;
+			std::cout << "Compression Type: 0x" << std::hex << entry.compressionType << std::endl;
+			std::cout << "Compressed Size: " << std::dec << entry.compressedSize << " bytes." << std::endl;
+			std::cout << "Decompressed Size: " << std::dec << entry.size << " bytes." << std::endl;
 
 			// Check the compression type and call the appropriate function
 			if (entry.compressionType == 0x0) {
-				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 264]);
 				std::cout << "\nCompression type: 0 (Uncompressed)" << std::endl;
 				extractLZ4(input, outputDirectory, entry, filesExtracted, numFiles);
 			}
 			else if (entry.compressionType == 0x21000000) {
-				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 268]);
 				std::cout << "\nCompression type: 1 (Pre-Patch 6 - ZLIB)" << std::endl;
 				extractZLIB(input, outputDirectory, entry, filesExtracted, numFiles);
 			}
 			else if (entry.compressionType == 0x42000000) {
-				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 268]);
 				std::cout << "\nCompression type: 2 (LZ4)" << std::endl;
 				extractLZ4(input, outputDirectory, entry, filesExtracted, numFiles);
 			}
 			else if (entry.compressionType == 0x23000000) {
-				entry.size = *reinterpret_cast<uint32_t*>(&tableData[i * TABLE_ENTRY_SIZE + 268]);
 				std::cout << "\nCompression type: 3 (Patch 6 - ZSTD)" << std::endl;
 				extractZSTD(input, outputDirectory, entry, filesExtracted, numFiles);
 			}
 			else {
-				std::cout << "\n4GB+ Sized files don't extract fully! Why???" << std::endl;
+				std::cout << "\n4GB+ Sized files don't extract fully! Could use some help here :)" << std::endl;
 			}
 		}
 
 		std::cout << "\nExtraction complete!";
-
+		fileList.close();
 	}
 	catch (const std::runtime_error& e) {
 		std::cerr << e.what() << std::endl;
